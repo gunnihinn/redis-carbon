@@ -1,0 +1,62 @@
+= Redis Carbon
+
+Redis Carbon is a backend for Graphite.
+
+== Why?
+
+http://antirez.com/news/128[Antirez] says that Redis streams are an opportunity
+waiting to be seized by timeseries enthusiasts. Let's put that idea to the test.
+
+Redis Carbon is a backend for Graphite. It is a drop-in replacement for `carbon`
+or `go-carbon`. Among its duties are to:
+
+- log incoming Graphite protocol messages
+- answer what timeseries it stores on `/find`
+- return the data it has on `/render`
+
+We're going to cheat at the first one. The Graphite protocol messages are a
+triple `(name, epoch, value)`, where `value` should get logged to `name` at
+`timestamp`. We're going to ignore the message `timestamp` and log the message
+under the time that Redis streams give us. Our justifications for doing so are:
+
+*   Redis streams are append only. If we've already seen a later timestamp, our
+    only option would be to throw the message away.
+*   Carbon's lowest resolution is secondly, while Redis streams offer
+    millisecondly resolution. Multisecond lag is real, even in this day and age,
+    but we're going to assume it won't matter for the metric aggregations we do.
+
+What we offer in return is:
+
+*   Dynamic retention choices and aggregation functions. We log every message,
+    and compute retention on the fly on every request. It's easy to change your
+    mind after you start collecting data.
+*   All writes per retention period are kept. In contrast to Whisper-backed
+    stores, last write doesn't win.
+
+== Should I use this?
+
+Good lord, no.
+
+== Is there any use for this?
+
+Yes! Assuming this software becomes production ready (where "production ready"
+means good enough to be used at the scale of the largest Graphite users out
+there), there are two cases where this might be a good addition to an existing
+Graphite stack:
+
+*   Graphite does not deal well with infrequently written data, such as data
+    that originates with human actions. Redis Carbon could aggregate such data
+    into buckets that Graphite is comfortable with, and write those to
+    longer-term storage.
+    (Whether or not such data _should_ be written to Graphite is not the point;
+    for people will write data to where people can write data **right the fuck
+    now** without thinking very much about the consequences. Ask me how I know.)
+
+*   Graphite does not at all like dealing with data whose source changes
+    frequently, but is philosophically the "same data". As an example,
+    Graphite/Carbon is abysmal at tracking metrics from services in Kubernetes,
+    as the naive way of setting that up will involve pod names, which change on
+    every restart.
+    With Redis Carbon, every one of the _N_ pods of service `foo` can write to
+    `foo.request.count`. Those writes will all be counted, and could be
+    aggregated and written to a Graphite/Carbon store for longer-term storage.
