@@ -46,6 +46,12 @@ Keep track of messages received, sent and errored.
 
 == Carbon server
 
+The graphite-web API is somewhat documented here:
+
+    https://graphite-api.readthedocs.io/en/latest/api.html#
+
+The carbon API is a bit simpler.
+
 === /render
 
 Request arguments:
@@ -53,6 +59,7 @@ Request arguments:
     target: metric name; may contain wildcards
     from: epoch
     to: epoch
+    format: json, protobuf, pickle
 
 We resolve any wildcards into a list of metric paths. For each path, we issue:
 
@@ -60,3 +67,31 @@ We resolve any wildcards into a list of metric paths. For each path, we issue:
 
 We resample the return values into buckets according to the metric retention.
 (Automatically figure out what retention to apply, based on from and until?)
+We need to read a config file to infer the retentions and aggregation functions.
+
+The config files we need to read are:
+
+    https://graphite.readthedocs.io/en/latest/config-carbon.html#storage-schemas-conf
+    https://graphite.readthedocs.io/en/latest/config-carbon.html#storage-aggregation-conf
+
+=== /metrics
+
+We need to be able to see the metric tree to answer these queries.
+
+Stream names are just normal Redis keys. We seem to have two option to
+distinguish those from other keys:
+
+1. Use Redis namespaces to only write streams to a given namespace
+2. Use a common prefix for metric streams 
+
+(1) sounds nice, but what namespace a client writes to is a property of the
+connection we're using and needs to be set every time. It seems fragile, and
+that we'd want to do (2) for defense anyway.
+
+For (2), we can prefix metric stream keys with something like `metric:` and
+use `SCAN $C MATCH metric:*` to iterate through those keys.
+
+For `/metrics/find` we can match keys against the query during the iteration.
+For `/metrics/index.json` we don't need to filter anything. I'm not sure what
+`/metrics/expand` does. (Googles... looks like it only returns the metric names
+from a `/metrics/find` call?)
