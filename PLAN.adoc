@@ -1,0 +1,62 @@
+= Plan
+
+There are two components to our system:
+
+    redis-carbon  <->  redis
+
+Redis Carbon has two kinds of clients: Graphite readers and Graphite writers.
+
+
+== Graphite protocol server
+
+Listen on port 2003 by default. Accept TCP connections with message contents:
+
+    path value timestamp\n
+
+`path` is a Graphite metric path: 
+
+    word := [A-Za-z0-9_]+ // or (\S|./)+ ?
+    path := word(.word)+
+
+`value` is a string representation of a float.
+
+`timestamp` is a UNIX epoch.
+
+There is a finite state machine that describes how to handle a message:
+
+    1. Receive raw message.
+    2. Parse message into (path, value, timestamp).
+    3. Validate path and value.
+    4. Send 'value' to Redis stream 'path'.
+    4. Done.
+    E. Log error.
+
+The state flow is:
+
+    digraph G {
+        receive -> parse -> validate -> send -> done
+        receive -> error
+        parse -> error
+        validate -> error
+        send -> error
+    }
+
+Keep track of messages received, sent and errored.
+
+
+== Carbon server
+
+=== /render
+
+Request arguments:
+
+    target: metric name; may contain wildcards
+    from: epoch
+    to: epoch
+
+We resolve any wildcards into a list of metric paths. For each path, we issue:
+
+    XRANGE path from_ms to_ms [count]
+
+We resample the return values into buckets according to the metric retention.
+(Automatically figure out what retention to apply, based on from and until?)
