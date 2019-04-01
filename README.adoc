@@ -2,6 +2,23 @@
 
 Redis Carbon is a backend for Graphite.
 
+== Run
+
+----
+sudo docker run --name some-redis -p 127.0.0.1:6379:6379 -d redis
+make
+./redis-carbon
+----
+
+In another terminal:
+
+----
+echo 'foo 1 -1' | nc -c 127.0.0.1 2003
+----
+
+In `redis-cli`, run `XRANGE metric:foo - +` to see the values that have been
+written.
+
 == Why?
 
 http://antirez.com/news/128[Antirez] says that Redis streams are an opportunity
