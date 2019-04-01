@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-redis/redis"
 )
 
 type Point struct {
@@ -47,9 +49,18 @@ func handleStream(c net.Conn, ch chan Point) {
 	}
 }
 
-func handlePoints(ch chan Point) {
+func handlePoints(rdb *redis.Client, ch chan Point) {
 	for pt := range ch {
-		fmt.Printf("%+v\n", pt)
+		args := &redis.XAddArgs{
+			Stream: fmt.Sprintf("metric:%s", pt.Name),
+			Values: map[string]interface{}{"v": pt.Value},
+		}
+
+		cmd := rdb.XAdd(args)
+		_, err := cmd.Result()
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -60,8 +71,12 @@ func main() {
 	}
 	defer listener.Close()
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+
 	ch := make(chan Point, 1<<10)
-	go handlePoints(ch)
+	go handlePoints(rdb, ch)
 
 	for {
 		conn, err := listener.Accept()
