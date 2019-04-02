@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"expvar"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -70,14 +73,17 @@ func handleStream(c net.Conn, ch chan Point) {
 	}
 }
 
-func handlePoints(rdb *redis.Client, ch chan Point) {
+func (s *Stats) handlePoints(rdb *redis.Client, ch chan Point) {
 	for pt := range ch {
+		atomic.AddInt64(&s.pointTotal, 1)
+
 		v, err := pt.ValueBytes()
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error": err,
 				"value": pt.Value,
 			}).Error("Couldn't convert float to bytes")
+			atomic.AddInt64(&s.pointErrors, 1)
 			continue
 		}
 
@@ -91,8 +97,14 @@ func handlePoints(rdb *redis.Client, ch chan Point) {
 			log.WithFields(log.Fields{
 				"error": err,
 			}).Error("Redis error")
+			atomic.AddInt64(&s.pointErrors, 1)
 		}
 	}
+}
+
+type Stats struct {
+	pointTotal  int64
+	pointErrors int64
 }
 
 func main() {
@@ -107,12 +119,33 @@ func main() {
 	})
 
 	ch := make(chan Point, 1<<10)
-	go handlePoints(rdb, ch)
+	stats := new(Stats)
+	go stats.handlePoints(rdb, ch)
+
+	go func() {
+		expvar.Publish("point_queue_length", expvar.Func((func() interface{} {
+			return len(ch)
+		})))
+		expvar.Publish("point_total", expvar.Func((func() interface{} {
+			return atomic.LoadInt64(&stats.pointTotal)
+		})))
+		expvar.Publish("point_errors", expvar.Func((func() interface{} {
+			return atomic.LoadInt64(&stats.pointErrors)
+		})))
+
+		if err := http.ListenAndServe(":8080", nil); err != nil {
+			log.WithFields(log.Fields{
+				"error": err,
+			}).Fatal("HTTP server died")
+		}
+	}()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"error": err,
+			}).Error("Couldn't accept connection")
 			continue
 		}
 
