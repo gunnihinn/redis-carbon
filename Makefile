@@ -1,5 +1,6 @@
-redis-carbon: main.go
-	go build -o redis-carbon main.go
+redis-carbon: $(shell find . -name "*.go")
+	go build -o redis-carbon
 
 .PHONY: clean
+clean:
 	rm -f redis-carbon
