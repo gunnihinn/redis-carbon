@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +18,18 @@ import (
 type Point struct {
 	Name  string
 	Value float32
+}
+
+func (p Point) StreamName() string {
+	return fmt.Sprintf("metric:%s", p.Name)
+}
+
+func (p Point) ValueBytes() ([]byte, error) {
+	b := make([]byte, 4)
+	buf := bytes.NewBuffer(b)
+	err := binary.Write(buf, binary.LittleEndian, p.Value)
+
+	return buf.Bytes(), err
 }
 
 func handleStream(c net.Conn, ch chan Point) {
@@ -51,14 +65,19 @@ func handleStream(c net.Conn, ch chan Point) {
 
 func handlePoints(rdb *redis.Client, ch chan Point) {
 	for pt := range ch {
-		args := &redis.XAddArgs{
-			Stream: fmt.Sprintf("metric:%s", pt.Name),
-			Values: map[string]interface{}{"v": pt.Value},
+		v, err := pt.ValueBytes()
+		if err != nil {
+			log.Println(err)
+			continue
 		}
 
-		cmd := rdb.XAdd(args)
-		_, err := cmd.Result()
-		if err != nil {
+		args := redis.XAddArgs{
+			Stream: pt.StreamName(),
+			Values: map[string]interface{}{"v": v},
+		}
+
+		cmd := rdb.XAdd(&args)
+		if _, err := cmd.Result(); err != nil {
 			log.Println(err)
 		}
 	}

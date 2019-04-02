@@ -13,7 +13,17 @@ cleanup() {
     sudo docker stop test-redis
 }
 
+send() {
+    echo "foo $1 -1" | netcat -c 127.0.0.1 6379
+}
+
 trap EXIT cleanup
 trap ERROR cleanup
 
+setup
 
+send 1
+send 2
+send 3
+
+redis-cli 'XRANGE metric:foo - +'
