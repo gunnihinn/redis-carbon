@@ -1,6 +1,11 @@
+bin := redis-carbon
+
+
+all: $(bin)
+
 redis-carbon: $(shell find . -name "*.go")
-	go build -o redis-carbon
+	go build -o $(bin)
 
 .PHONY: clean
 clean:
-	rm -f redis-carbon
+	rm -f $(bin)
