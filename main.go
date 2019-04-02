@@ -6,13 +6,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis"
+	log "github.com/sirupsen/logrus"
 )
 
 type Point struct {
@@ -39,23 +39,30 @@ func handleStream(c net.Conn, ch chan Point) {
 		c.SetReadDeadline(time.Now().Add(time.Second))
 		line, err := r.ReadString('\n')
 		if err == io.EOF {
-			break
+			return
 		}
 
 		if err != nil {
-			log.Println(err)
-			break
+			log.WithFields(log.Fields{
+				"error": err,
+			}).Error("Couldn't read from socket")
+			return
 		}
 
 		parts := strings.SplitN(line, " ", 3)
 		if len(parts) != 3 {
-			log.Println(fmt.Errorf("Invalid input '%s'", line))
+			log.WithFields(log.Fields{
+				"line": line,
+			}).Error("Invalid input")
 			continue
 		}
 
 		val, err := strconv.ParseFloat(parts[1], 32)
 		if err != nil {
-			log.Println(fmt.Errorf("Invalid float in input '%s': %s", line, err))
+			log.WithFields(log.Fields{
+				"error": err,
+				"line":  line,
+			}).Error("Invalid input")
 			continue
 		}
 
@@ -67,7 +74,10 @@ func handlePoints(rdb *redis.Client, ch chan Point) {
 	for pt := range ch {
 		v, err := pt.ValueBytes()
 		if err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"error": err,
+				"value": pt.Value,
+			}).Error("Couldn't convert float to bytes")
 			continue
 		}
 
@@ -78,7 +88,9 @@ func handlePoints(rdb *redis.Client, ch chan Point) {
 
 		cmd := rdb.XAdd(&args)
 		if _, err := cmd.Result(); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"error": err,
+			}).Error("Redis error")
 		}
 	}
 }
