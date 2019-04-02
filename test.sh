@@ -1,24 +1,24 @@
 #!/bin/bash
 
-set euo pipefail
+set -euo pipefail
 
-setup() {
-    make clean all
-    redis-carbon &
-    sudo docker run --name test-redis -p 127.0.0.1:6379:6379 -d redis
+function setup {
+    make all > /dev/null
+    ./redis-carbon &
+    sudo docker run --name test-redis -p 127.0.0.1:6379:6379 -d redis > /dev/null
 }
 
-cleanup() {
+function cleanup {
     pkill -f redis-carbon
-    sudo docker stop test-redis
+    sudo docker stop test-redis > /dev/null
+    sudo docker rm test-redis > /dev/null
 }
 
-send() {
-    echo "foo $1 -1" | netcat -c 127.0.0.1 6379
+function send {
+    echo "foo $1 -1" | netcat -c 127.0.0.1 2003
 }
 
-trap EXIT cleanup
-trap ERROR cleanup
+trap cleanup EXIT
 
 setup
 
@@ -26,4 +26,10 @@ send 1
 send 2
 send 3
 
-redis-cli 'XRANGE metric:foo - +'
+len=$(redis-cli XLEN metric:foo)
+
+if [[ "$len" -ne 3 ]]; then
+    echo "Expected 3 elements in stream, got $len:"
+    redis-cli XRANGE metric:foo - +
+    exit 1
+fi

@@ -27,9 +27,8 @@ func (p Point) StreamName() string {
 	return fmt.Sprintf("metric:%s", p.Name)
 }
 
-func (p Point) ValueBytes() ([]byte, error) {
-	b := make([]byte, 4)
-	buf := bytes.NewBuffer(b)
+func (p Point) Encode() ([]byte, error) {
+	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, p.Value)
 
 	return buf.Bytes(), err
@@ -77,7 +76,7 @@ func (s *Stats) handlePoints(rdb *redis.Client, ch chan Point) {
 	for pt := range ch {
 		atomic.AddInt64(&s.pointTotal, 1)
 
-		v, err := pt.ValueBytes()
+		v, err := pt.Encode()
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error": err,
