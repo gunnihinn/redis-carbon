@@ -5,7 +5,6 @@ import (
 	"expvar"
 	"io"
 	"net"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -17,28 +16,23 @@ type Carbon struct {
 	stats *Stats
 }
 
-func NewCarbon() Carbon {
+func NewCarbon(s *Stats) Carbon {
 	c := Carbon{
 		ch:    make(chan Point, 1<<10),
-		stats: new(Stats),
+		stats: s,
 	}
 
 	expvar.Publish("point_queue_length", expvar.Func((func() interface{} {
 		return len(c.ch)
 	})))
 	expvar.Publish("point_total", expvar.Func((func() interface{} {
-		return atomic.LoadInt64(&c.stats.pointTotal)
+		return c.stats.PointTotal()
 	})))
 	expvar.Publish("point_errors", expvar.Func((func() interface{} {
-		return atomic.LoadInt64(&c.stats.pointErrors)
+		return c.stats.PointErrors()
 	})))
 
 	return c
-}
-
-type Stats struct {
-	pointTotal  int64
-	pointErrors int64
 }
 
 func (c Carbon) handleSockets(listener net.Listener) {
@@ -90,7 +84,7 @@ func (c Carbon) handleConnection(conn net.Conn) {
 
 func (c Carbon) handlePoints(rdb *redis.Client) {
 	for pt := range c.ch {
-		atomic.AddInt64(&c.stats.pointTotal, 1)
+		c.stats.IncPointTotal()
 
 		v, err := pt.Encode()
 		if err != nil {
@@ -98,7 +92,7 @@ func (c Carbon) handlePoints(rdb *redis.Client) {
 				"error": err,
 				"value": pt.Value,
 			}).Error("Couldn't convert float to bytes")
-			atomic.AddInt64(&c.stats.pointErrors, 1)
+			c.stats.IncPointErrors()
 			continue
 		}
 
@@ -112,7 +106,7 @@ func (c Carbon) handlePoints(rdb *redis.Client) {
 			log.WithFields(log.Fields{
 				"error": err,
 			}).Error("Redis error")
-			atomic.AddInt64(&c.stats.pointErrors, 1)
+			c.stats.IncPointErrors()
 		}
 	}
 }

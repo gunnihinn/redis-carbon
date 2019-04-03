@@ -21,13 +21,15 @@ func main() {
 		Addr: "localhost:6379",
 	})
 
-	carbon := NewCarbon()
+	stats := new(Stats)
+	carbon := NewCarbon(stats)
 	go carbon.handlePoints(rdb)
 	go carbon.handleSockets(listener)
 
-	http.Handle("/render", RenderHandler(carbon))
-	http.Handle("/metrics/find", MetricsFindHandler(carbon))
-	http.Handle("/metrics/index", MetricsIndexHandler(carbon))
+	handler := handler{rdb}
+	http.Handle("/render", RenderHandler(handler))
+	http.Handle("/metrics/find", MetricsFindHandler(handler))
+	http.Handle("/metrics/index.json", MetricsIndexHandler(handler))
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.WithFields(log.Fields{
