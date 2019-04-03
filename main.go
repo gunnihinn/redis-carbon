@@ -11,7 +11,9 @@ import (
 func main() {
 	listener, err := net.Listen("tcp", ":2003")
 	if err != nil {
-		log.Fatal(err)
+		log.WithFields(log.Fieds{
+			"error": err,
+		}).Fatal("Couldn't listen on TCP port")
 	}
 	defer listener.Close()
 
