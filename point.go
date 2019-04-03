@@ -28,7 +28,7 @@ func PointFromLine(line string) (Point, error) {
 }
 
 func (p Point) StreamName() string {
-	return fmt.Sprintf("metric:%s", p.Name)
+	return METRIC_PREFIX + p.Name
 }
 
 func (p Point) Encode() ([]byte, error) {
