@@ -95,3 +95,29 @@ For `/metrics/find` we can match keys against the query during the iteration.
 For `/metrics/index.json` we don't need to filter anything. I'm not sure what
 `/metrics/expand` does. (Googles... looks like it only returns the metric names
 from a `/metrics/find` call?)
+
+=== Dealing with wildcards
+
+The `/metrics/find` endpoint returns interesting things. If we have a metric
+`foo.bar.spam.eggs`, and query for `foo.*.spam.*`, it will return:
+
+    foo.bar.spam.*
+        expandable: yes
+        leaf: no
+
+However, if we'd get `foo.*.spam.*` in a render request, we'd want to expand it
+directly to `foo.bar.spam.eggs`.
+
+Another question is how to deal with leaf/not-leaf. If we're using Redis as a
+backend, we can only detect leaf nodes. If we'd query for `foo.bar.*`, we'd
+expect to match `foo.bar.spam.eggs`, but should return only the match:
+
+    foo.bar.spam
+        expandable: yes
+        leaf: no
+
+I should go read what people think they mean by these find return values.
+
+ACTUALLY: Read what go-carbon does.
+
+    https://github.com/lomik/go-carbon/blob/master/carbonserver/carbonserver.go#L668
