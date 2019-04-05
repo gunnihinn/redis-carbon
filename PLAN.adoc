@@ -121,3 +121,40 @@ I should go read what people think they mean by these find return values.
 ACTUALLY: Read what go-carbon does.
 
     https://github.com/lomik/go-carbon/blob/master/carbonserver/carbonserver.go#L668
+
+Example output from go-carbon:
+
+----
+{                       
+  "metrics": [
+    {    
+      "name": "foo.*",           
+      "matches": [      
+        {
+          "path": "foo.bar"
+        }
+      ]
+    }
+  ]                              
+}
+
+
+curl -s 'localhost:8080/metrics/find/?query=foo.*.*' | jq .    
+{
+  "metrics": [
+    {
+      "name": "foo.*.*",
+      "matches": [
+        {
+          "path": "foo.bar.eggs",
+          "isLeaf": true
+        },
+        {
+          "path": "foo.bar.spam",
+          "isLeaf": true
+        }
+      ]
+    }
+  ]
+}
+----

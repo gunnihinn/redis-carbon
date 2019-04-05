@@ -4,10 +4,56 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-redis/redis"
 )
+
+func parseMatchers(query string) ([]*regexp.Regexp, error) {
+	// TODO(gmagnusson: Make split aware of nesting dots? Or is error anyway?
+	paths := strings.Split(query, ".")
+	matchers := make([]*regexp.Regexp, 0, len(paths))
+
+	for _, path := range paths {
+		// TODO(gmagnusson): Deal with escaped *
+		path = strings.ReplaceAll(path, "*", ".*")
+		if !strings.HasPrefix(path, "^") {
+			path = "^" + path
+		}
+		if !strings.HasSuffix(path, "$") {
+			path = path + "$"
+		}
+
+		re, err := regexp.Compile(path)
+		if err != nil {
+			return nil, err
+		}
+
+		matchers = append(matchers, re)
+	}
+
+	return matchers, nil
+}
+
+func matches(matchers []*regexp.Regexp, name string) bool {
+	if strings.HasPrefix(name, METRIC_PREFIX) {
+		name = strings.TrimPrefix(name, METRIC_PREFIX)
+	}
+
+	parts := strings.Split(name, ".")
+	if len(parts) < len(matchers) {
+		return false
+	}
+
+	for i := range matchers {
+		if !matchers[i].MatchString(parts[i]) {
+			return false
+		}
+	}
+
+	return true
+}
 
 // TODO(gmagnusson): Is *redis.Client thread safe?
 type handler struct {
