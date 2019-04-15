@@ -17,7 +17,7 @@ func parseMatchers(query string) ([]*regexp.Regexp, error) {
 
 	for _, path := range paths {
 		// TODO(gmagnusson): Deal with escaped *
-		path = strings.ReplaceAll(path, "*", ".*")
+		path = strings.Replace(path, "*", ".*", -1)
 		if !strings.HasPrefix(path, "^") {
 			path = "^" + path
 		}
